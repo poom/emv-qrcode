@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/dongri/emv-qrcode/crc16"
+	"github.com/sigurn/crc16"
 )
 
 // const ...
@@ -953,6 +953,43 @@ func ParseEMVQR(payload string) (*EMVQR, error) {
 	return emvqr, nil
 }
 
+func (c *EMVQR) checkPointOfInitiationMethod() error {
+	if c.PointOfInitiationMethod.Value == "" {
+		return nil
+	}
+	if c.PointOfInitiationMethod.Value != PointOfInitiationMethodStatic && c.PointOfInitiationMethod.Value != PointOfInitiationMethodDynamic {
+		return fmt.Errorf("PointOfInitiationMethod should be \"11\" or \"12\", PointOfInitiationMethod: %s", c)
+	}
+
+	return nil
+}
+
+func (c *EMVQR) checkMerchantInformationLanguageTemplate() error {
+	if c.MerchantInformationLanguageTemplate == nil {
+		return nil
+	}
+	if err := c.MerchantInformationLanguageTemplate.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *EMVQR) checkCRC() error {
+	// When create EMVQR, crc will be blank
+	if c.CRC.Value == "" {
+		return nil
+	}
+
+	payload := c.GeneratePayload()
+	calculatedCRC := payload[len(payload)-4:]
+	if c.CRC.Value != calculatedCRC {
+		return fmt.Errorf("CRC should be %s and got %s", calculatedCRC, c.CRC.Value)
+	}
+
+	return nil
+}
+
 // Validate ...
 func (c *EMVQR) Validate() error {
 	// check mandatory
@@ -977,17 +1014,18 @@ func (c *EMVQR) Validate() error {
 	if c.MerchantCity.Value == "" {
 		return errors.New("MerchantCity is mandatory")
 	}
+
 	// check validate
-	if c.PointOfInitiationMethod.Value != "" {
-		if c.PointOfInitiationMethod.Value != PointOfInitiationMethodStatic && c.PointOfInitiationMethod.Value != PointOfInitiationMethodDynamic {
-			return fmt.Errorf("PointOfInitiationMethod should be \"11\" or \"12\", PointOfInitiationMethod: %s", c)
-		}
+	if err := c.checkPointOfInitiationMethod(); err != nil {
+		return err
 	}
-	if c.MerchantInformationLanguageTemplate != nil {
-		if err := c.MerchantInformationLanguageTemplate.Validate(); err != nil {
-			return err
-		}
+	if err := c.checkMerchantInformationLanguageTemplate(); err != nil {
+		return err
 	}
+	if err := c.checkCRC(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
